@@ -41,3 +41,9 @@ yarn-error.log*
 next-env.d.ts
 
 !.env.example
+
+# Local npm cache
+.npm-cache/
+
+# Generated Prisma Client
+/generated/
