@@ -1,11 +1,11 @@
+
 name: Docker Cloud Build
 
 on:
-  push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
-  workflow_dispatch:
+  workflow_run:
+    workflows: ["Education System CI"]
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: read
@@ -13,11 +13,16 @@ permissions:
 
 jobs:
   docker:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
     runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Set lowercase image name
         id: image
@@ -28,7 +33,6 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Login to GitHub Container Registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -41,23 +45,21 @@ jobs:
         with:
           images: ghcr.io/${{ steps.image.outputs.name }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
             type=sha
 
       - name: Build and publish Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Trigger Render deployment
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
           curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"
-
